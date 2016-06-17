@@ -19,7 +19,9 @@ namespace React
 	{
 		/// <summary>
 		/// Adds a script to the list of scripts that are executed. This should be called for all
-		/// React components and their dependencies.
+		/// React components and their dependencies. If the script does not have any JSX in it
+		/// (for example, it's built using Webpack or Gulp), use 
+		/// <see cref="AddScriptWithoutTransform"/> instead.
 		/// </summary>
 		/// <param name="filename">
 		/// Name of the file to execute. Should be a server relative path starting with ~ (eg. 
@@ -29,9 +31,28 @@ namespace React
 		IReactSiteConfiguration AddScript(string filename);
 
 		/// <summary>
-		/// Gets a list of all the scripts that have been added to this configuration.
+		/// Adds a script to the list of scripts that are executed. This is the same as
+		/// <see cref="AddScript"/> except it does not run JSX transformation on the script and thus is
+		/// more efficient.
 		/// </summary>
-		IList<string> Scripts { get; }
+		/// <param name="filename">
+		/// Name of the file to execute. Should be a server relative path starting with ~ (eg. 
+		/// <c>~/Scripts/Awesome.js</c>)
+		/// </param>
+		/// <returns>The configuration, for chaining</returns>
+		IReactSiteConfiguration AddScriptWithoutTransform(string filename);
+
+		/// <summary>
+		/// Gets a list of all the scripts that have been added to this configuration and require JSX
+		/// transformation to be run.
+		/// </summary>
+		IEnumerable<string> Scripts { get; }
+
+		/// <summary>
+		/// Gets a list of all the scripts that have been added to this configuration and do not 
+		/// require JSX transformation to be run.
+		/// </summary>
+		IEnumerable<string> ScriptsWithoutTransform { get; } 
 
 		/// <summary>
 		/// A value indicating if es6 syntax should be rewritten.
@@ -99,5 +120,27 @@ namespace React
 		/// Defaults to <c>25</c>.
 		/// </summary>
 		IReactSiteConfiguration SetMaxEngines(int? maxEngines);
+
+		/// <summary>
+		/// Gets or sets whether the MSIE engine should be used if V8 is unavailable.
+		/// </summary>
+		bool AllowMsieEngine { get; set; }
+		/// <summary>
+		/// Sets whether the MSIE engine should be used if V8 is unavailable.
+		/// </summary>
+		/// <returns></returns>
+		IReactSiteConfiguration SetAllowMsieEngine(bool allowMsieEngine);
+
+		/// <summary>
+		/// Gets or sets whether the built-in version of React is loaded. If <c>false</c>, you must
+		/// provide your own version of React.
+		/// </summary>
+		bool LoadReact { get; set; }
+		/// <summary>
+		/// Sets whether the built-in version of React is loaded. If <c>false</c>, you must 
+		/// provide your own version of React.
+		/// </summary>
+		/// <returns>The configuration, for chaining</returns>
+		IReactSiteConfiguration SetLoadReact(bool loadReact);
 	}
 }

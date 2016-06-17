@@ -13,9 +13,8 @@ packages available:
    React and JSX.  You will normally use this through an integration library
    like React.Mvc4.
  * [React.Web.Mvc4](https://www.nuget.org/packages/React.Web.Mvc4/) - Integration with ASP.NET MVC 4 and 5.
+ * [React.AspNet](https://www.nuget.org/packages/React.AspNet/) - Integration with ASP.NET 5 (vNext), including ASP.NET MVC 6. [Learn more about ASP.NET 5 support](/getting-started/aspnet5.html)
  * [React.Web.Mvc3](https://www.nuget.org/packages/React.Web.Mvc3/) - Integration with ASP.NET MVC 3.
- * [React.JavaScriptEngine.ClearScriptV8](https://www.nuget.org/packages/React.JavaScriptEngine.ClearScriptV8/) - Support for Google's V8 JavaScript engine on Windows. Highly recommended.
- * [React.JavaScriptEngine.VroomJs](https://www.nuget.org/packages/React.JavaScriptEngine.VroomJs/) - Support for Google's V8 JavaScript engine on Linux and Mac OS. Required if you want to use ReactJS.NET with Mono.
  * [Cassette.React](https://www.nuget.org/packages/Cassette.React/) - Integration with [Cassette](http://getcassette.net/). The recommended way to combine and minify your JavaScript.
  * [System.Web.Optimization.React](https://www.nuget.org/packages/System.Web.Optimization.React/) - Integration with
    [ASP.NET Bundling and Minification](http://www.asp.net/mvc/tutorials/mvc-4/bundling-and-minification).

@@ -1,5 +1,5 @@
 {
-    "version": "1.4.0-*",
+    "version": "1.5.2-*",
     "configurations": {
         "Debug": {
             "compilationOptions": {
@@ -10,7 +10,7 @@
             "compilationOptions": {
                 "define": [ "RELEASE", "TRACE", "ASPNET5" ],
                 "optimize": true,
-                "warningsAsErrors": true,
+                "warningsAsErrors": true
             }
         }
     },
@@ -19,7 +19,8 @@
         "Microsoft.AspNet.Hosting": "1.0.0.0-beta3",
         "Microsoft.AspNet.Mvc.Core": "6.0.0.0-beta3",
         "Microsoft.AspNet.StaticFiles": "1.0.0.0-beta3",
-        "React.Core": ""
+        "React.Core": "",
+        "JavaScriptEngineSwitcher.Core": "1.2.4.0"
     },
     "frameworks": {
         "aspnet50": { }
@@ -27,7 +28,7 @@
 
     // NuGet info
     "authors": [ "Daniel Lo Nigro" ],
-    "description": "ReactJS tools for ASP.NET 5, including ASP.NET MVC 6. Please refer to project site (http://reactjs.net/) for more details, usage examples and sample code",
+    "description": "ReactJS tools for ASP.NET 5, including ASP.NET MVC 6. Please refer to project site (http://reactjs.net/) for full installation instructions, usage examples and sample code",
     "tags": [ "asp.net", "mvc", "asp", "javascript", "js", "react", "facebook", "reactjs", "vnext" ],
     "projectUrl": "http://reactjs.net/"
 }

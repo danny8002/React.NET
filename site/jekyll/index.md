@@ -20,6 +20,7 @@ id: home
       other .NET languages, focusing specifically on ASP.NET MVC (although it
       also works in other environments). It assumes you already have some basic
       knowledge about React. It is cross-platform and can run on Linux via Mono.
+      Now with support for [ASP.NET 5 Beta](/getting-started/aspnet5.html)!
       Take a look at [the tutorial](/getting-started/tutorial.html) to see how
       easy it is to get started with React and ReactJS.NET!
     </p>
@@ -111,7 +112,7 @@ bundles.Add(new JsxBundle("~/bundles/main").Include(
 })
 
 <!-- Initialise the component in JavaScript too -->
-<script src="http://fb.me/react-0.12.2.min.js"></script>
+<script src="http://fb.me/react-0.13.1.min.js"></script>
 @Scripts.Render("~/bundles/main")
 @Html.ReactInitJavaScript()
 ```

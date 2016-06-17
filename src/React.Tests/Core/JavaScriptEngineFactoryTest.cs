@@ -7,10 +7,12 @@
  *  of patent rights can be found in the PATENTS file in the same directory.
  */
 
+using System.Collections.Generic;
 using System.Threading;
 using JavaScriptEngineSwitcher.Core;
 using Moq;
 using NUnit.Framework;
+using React.Exceptions;
 
 namespace React.Tests.Core
 {
@@ -20,6 +22,8 @@ namespace React.Tests.Core
 		private JavaScriptEngineFactory CreateFactory()
 		{
 			var config = new Mock<IReactSiteConfiguration>();
+			config.Setup(x => x.ScriptsWithoutTransform).Returns(new List<string>());
+			config.Setup(x => x.LoadReact).Returns(true);
 			var fileSystem = new Mock<IFileSystem>();
 			var registration = new JavaScriptEngineFactory.Registration
 			{
@@ -80,6 +84,77 @@ namespace React.Tests.Core
 			// Same thread should share same engine
 			Assert.AreEqual(engine1, engine3);
 			factory.DisposeEngineForCurrentThread();
+		}
+
+		[Test]
+		public void ShouldLoadFilesThatDoNotRequireTransform()
+		{
+			var jsEngine = new Mock<IJsEngine>();
+			jsEngine.Setup(x => x.Evaluate<int>("1 + 1")).Returns(2);
+
+			var config = new Mock<IReactSiteConfiguration>();
+			config.Setup(x => x.ScriptsWithoutTransform).Returns(new List<string> { "First.js", "Second.js" });
+			config.Setup(x => x.LoadReact).Returns(true);
+
+			var fileSystem = new Mock<IFileSystem>();
+			fileSystem.Setup(x => x.ReadAsString(It.IsAny<string>())).Returns<string>(path => "CONTENTS_" + path);
+
+			var registration = new JavaScriptEngineFactory.Registration
+			{
+				Factory = () => jsEngine.Object,
+				Priority = 1
+			};
+			var factory = new JavaScriptEngineFactory(new[] { registration }, config.Object, fileSystem.Object);
+
+			factory.GetEngineForCurrentThread();
+
+			jsEngine.Verify(x => x.Execute("CONTENTS_First.js"));
+			jsEngine.Verify(x => x.Execute("CONTENTS_Second.js"));
+		}
+
+		[Test]
+		public void ShouldHandleLoadingExternalReactVersion()
+		{
+			var jsEngine = new Mock<IJsEngine>();
+			jsEngine.Setup(x => x.Evaluate<int>("1 + 1")).Returns(2);
+			jsEngine.Setup(x => x.CallFunction<bool>("ReactNET_initReact")).Returns(true);
+			var config = new Mock<IReactSiteConfiguration>();
+			config.Setup(x => x.ScriptsWithoutTransform).Returns(new List<string>());
+			config.Setup(x => x.LoadReact).Returns(false);
+			var fileSystem = new Mock<IFileSystem>();
+			var registration = new JavaScriptEngineFactory.Registration
+			{
+				Factory = () => jsEngine.Object,
+				Priority = 1
+			};
+			var factory = new JavaScriptEngineFactory(new[] { registration }, config.Object, fileSystem.Object);
+
+			factory.GetEngineForCurrentThread();
+
+			jsEngine.Verify(x => x.CallFunction<bool>("ReactNET_initReact"));
+		}
+
+		[Test]
+		public void ShouldThrowIfReactVersionNotLoaded()
+		{
+			var jsEngine = new Mock<IJsEngine>();
+			jsEngine.Setup(x => x.Evaluate<int>("1 + 1")).Returns(2);
+			jsEngine.Setup(x => x.CallFunction<bool>("ReactNET_initReact")).Returns(false);
+			var config = new Mock<IReactSiteConfiguration>();
+			config.Setup(x => x.ScriptsWithoutTransform).Returns(new List<string>());
+			config.Setup(x => x.LoadReact).Returns(false);
+			var fileSystem = new Mock<IFileSystem>();
+			var registration = new JavaScriptEngineFactory.Registration
+			{
+				Factory = () => jsEngine.Object,
+				Priority = 1
+			};
+			var factory = new JavaScriptEngineFactory(new[] { registration }, config.Object, fileSystem.Object);
+
+			Assert.Throws<ReactNotInitialisedException>(() =>
+			{
+				factory.GetEngineForCurrentThread();
+			});
 		}
 	}
 }

@@ -2,10 +2,10 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using JavaScriptEngineSwitcher.Core;
+using JavaScriptEngineSwitcher.Msie;
 using JavaScriptEngineSwitcher.V8;
 using JSPool;
 using React.Exceptions;
@@ -39,27 +39,9 @@ namespace React
 		/// </summary>
 		protected IJsPool _pool;
 		/// <summary>
-		/// Used to recycle the JavaScript engine pool when relevant JavaScript files are modified.
-		/// </summary>
-		protected readonly FileSystemWatcher _watcher;
-		/// <summary>
-		/// Names of all the files that are loaded into the JavaScript engine. If any of these 
-		/// files are changed, the engines should be recycled
-		/// </summary>
-		protected readonly ISet<string> _watchedFiles;
-		/// <summary>
-		/// Timer for debouncing pool recycling
-		/// </summary>
-		protected readonly Timer _resetPoolTimer;
-		/// <summary>
 		/// Whether this class has been disposed.
 		/// </summary>
 		protected bool _disposed;
-
-		/// <summary>
-		/// Time period to debounce file system changed events, in milliseconds.
-		/// </summary>
-		protected const int DEBOUNCE_TIMEOUT = 25;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="JavaScriptEngineFactory"/> class.
@@ -72,34 +54,10 @@ namespace React
 		{
 			_config = config;
 			_fileSystem = fileSystem;
-			_factory = GetFactory(availableFactories);
+			_factory = GetFactory(availableFactories, config.AllowMsieEngine);
 			if (_config.ReuseJavaScriptEngines)
 			{
 				_pool = CreatePool();
-				_resetPoolTimer = new Timer(OnResetPoolTimer);
-				_watchedFiles = new HashSet<string>(_config.Scripts.Select(
-					fileName => _fileSystem.MapPath(fileName).ToLowerInvariant()
-				));
-				try
-				{
-					// Attempt to initialise a FileSystemWatcher so we can recycle the JavaScript
-					// engine pool when files are changed.
-					_watcher = new FileSystemWatcher
-					{
-						Path = _fileSystem.MapPath("~"),
-						IncludeSubdirectories = true,
-						EnableRaisingEvents = true,
-					};
-					_watcher.Changed += OnFileChanged;
-					_watcher.Created += OnFileChanged;
-					_watcher.Deleted += OnFileChanged;
-					_watcher.Renamed += OnFileChanged;
-				}
-				catch (Exception ex)
-				{
-					// Can't use FileSystemWatcher (eg. not running in Full Trust)
-					Trace.WriteLine("Unable to initialise FileSystemWatcher: " + ex.Message);
-				}
 			}
 		}
 
@@ -108,10 +66,16 @@ namespace React
 		/// </summary>
 		protected virtual IJsPool CreatePool()
 		{
+			var allFiles = _config.Scripts
+				.Concat(_config.ScriptsWithoutTransform)
+				.Select(_fileSystem.MapPath);
+
 			var poolConfig = new JsPoolConfig
 			{
 				EngineFactory = _factory,
 				Initializer = InitialiseEngine,
+				WatchPath = _fileSystem.MapPath("~/"),
+				WatchFiles = allFiles
 			};
 			if (_config.MaxEngines != null)
 			{
@@ -132,9 +96,64 @@ namespace React
 		{
 			var thisAssembly = typeof(ReactEnvironment).Assembly;
 			engine.ExecuteResource("React.Resources.shims.js", thisAssembly);
-			engine.ExecuteResource("React.Resources.react-with-addons.js", thisAssembly);
-			engine.Execute("var React = global.React");
-			engine.ExecuteResource("React.Resources.JSXTransformer.js", thisAssembly);
+			if (_config.LoadReact)
+			{
+				engine.ExecuteResource("React.Resources.react-with-addons.js", thisAssembly);
+				engine.Execute("React = global.React");
+				engine.ExecuteResource("React.Resources.JSXTransformer.js", thisAssembly);
+			}
+
+			LoadUserScripts(engine);
+			if (!_config.LoadReact)
+			{
+				// We expect to user to have loaded their own versino of React in the scripts that
+				// were loaded above, let's ensure that's the case. 
+				EnsureReactLoaded(engine);
+			}
+		}
+
+		/// <summary>
+		/// Loads any user-provided scripts. Only scripts that don't need JSX transformation can 
+		/// run immediately here. JSX files are loaded in ReactEnvironment.
+		/// </summary>
+		/// <param name="engine">Engine to load scripts into</param>
+		private void LoadUserScripts(IJsEngine engine)
+		{
+			foreach (var file in _config.ScriptsWithoutTransform)
+			{
+				try
+				{
+					var contents = _fileSystem.ReadAsString(file);
+					engine.Execute(contents);
+				}
+				catch (JsRuntimeException ex)
+				{
+					throw new ReactScriptLoadException(string.Format(
+						"Error while loading \"{0}\": {1}\r\nLine: {2}\r\nColumn: {3}",
+						file,
+						ex.Message,
+						ex.LineNumber,
+						ex.ColumnNumber
+					));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Ensures that React has been correctly loaded into the specified engine.
+		/// </summary>
+		/// <param name="engine">Engine to check</param>
+		private static void EnsureReactLoaded(IJsEngine engine)
+		{
+			var result = engine.CallFunction<bool>("ReactNET_initReact");
+			if (!result)
+			{
+				throw new ReactNotInitialisedException(
+					"React has not been loaded correctly. Please expose your version of React as a global " +
+					"variable named 'React', or enable the 'LoadReact' configuration option to " +
+					"use the built-in version of React."
+				);
+			}
 		}
 
 		/// <summary>
@@ -197,7 +216,7 @@ namespace React
 		/// The first functioning JavaScript engine with the lowest priority will be used.
 		/// </summary>
 		/// <returns>Function to create JavaScript engine</returns>
-		private static Func<IJsEngine> GetFactory(IEnumerable<Registration> availableFactories)
+		private static Func<IJsEngine> GetFactory(IEnumerable<Registration> availableFactories, bool allowMsie)
 		{
 			var availableEngineFactories = availableFactories
 				.OrderBy(x => x.Priority)
@@ -208,8 +227,7 @@ namespace React
 				try
 				{
 					engine = engineFactory();
-					// Perform a sanity test to ensure this engine is usable
-					if (engine.Evaluate<int>("1 + 1") == 2)
+					if (EngineIsUsable(engine, allowMsie))
 					{
 						// Success! Use this one.
 						return engineFactory;
@@ -234,7 +252,7 @@ namespace React
 			if (JavaScriptEngineUtils.EnvironmentSupportsClearScript())
 			{
 				JavaScriptEngineUtils.EnsureEngineFunctional<V8JsEngine, ClearScriptV8InitialisationException>(
-					ex => new ClearScriptV8InitialisationException(ex.Message)
+					ex => new ClearScriptV8InitialisationException(ex)
 				);
 			}
 			else if (JavaScriptEngineUtils.EnvironmentSupportsVroomJs())
@@ -244,6 +262,20 @@ namespace React
 				);
 			}
 			throw new ReactEngineNotFoundException();
+		}
+
+		/// <summary>
+		/// Performs a sanity check to ensure the specified engine type is usable.
+		/// </summary>
+		/// <param name="engine">Engine to test</param>
+		/// <param name="allowMsie">Whether the MSIE engine can be used</param>
+		/// <returns></returns>
+		private static bool EngineIsUsable(IJsEngine engine, bool allowMsie)
+		{
+			// Perform a sanity test to ensure this engine is usable
+			var isUsable = engine.Evaluate<int>("1 + 1") == 2;
+			var isMsie = engine is MsieJsEngine;
+			return isUsable && (!isMsie || allowMsie);
 		}
 
 		/// <summary>
@@ -263,36 +295,6 @@ namespace React
 			{
 				_pool.Dispose();
 				_pool = null;
-			}
-		}
-
-		/// <summary>
-		/// Handles events fired when any files are changed.
-		/// </summary>
-		/// <param name="sender">The sender</param>
-		/// <param name="args">The <see cref="FileSystemEventArgs"/> instance containing the event data</param>
-		protected virtual void OnFileChanged(object sender, FileSystemEventArgs args)
-		{
-			if (_watchedFiles.Contains(args.FullPath.ToLowerInvariant()))
-			{
-				// Use a timer so multiple changes only result in a single reset.
-				_resetPoolTimer.Change(DEBOUNCE_TIMEOUT, Timeout.Infinite);
-			}
-		}
-
-		/// <summary>
-		/// Called when any of the watched files have changed. Recycles the JavaScript engine pool
-		/// so the files are all reloaded.
-		/// </summary>
-		/// <param name="state">Unused</param>
-		protected virtual void OnResetPoolTimer(object state)
-		{
-			// Create the new pool before disposing the old pool so that _pool is never null.
-			var oldPool = _pool;
-			_pool = CreatePool();
-			if (oldPool != null)
-			{
-				oldPool.Dispose();
 			}
 		}
 

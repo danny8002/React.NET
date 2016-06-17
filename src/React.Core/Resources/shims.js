@@ -8,6 +8,7 @@
  */
 
 var global = global || {};
+var React;
 
 // Basic console shim. Caches all calls to console methods.
 function MockConsole() {
@@ -40,11 +41,35 @@ if (!Object.freeze) {
 	Object.freeze = function() { };
 }
 
+/**
+ * Finds a user-supplied version of React and ensures it's exposed globally.
+ *
+ * @return {bool}
+ */
+function ReactNET_initReact() {
+	if (typeof React !== 'undefined') {
+		// React is already a global, woohoo
+		return true;
+	}
+	if (global.React) {
+		React = global.React;
+		return true;
+	}
+	if (typeof require === 'function') {
+		// CommonJS-like environment (eg. Browserify)
+		React = require('react');
+		return true;
+	}
+	// :'(
+	return false;
+}
+
 function ReactNET_transform(input, harmony, stripTypes) {
 	try {
 		return global.JSXTransformer.transform(input, {
 			harmony: !!harmony,
-			stripTypes: !!stripTypes
+			stripTypes: !!stripTypes,
+			target: 'es3'
 		}).code;
 	} catch (ex) {
 		throw new Error(ex.message + " (at line " + ex.lineNumber + " column " + ex.column + ")");
@@ -59,6 +84,7 @@ function ReactNET_transform_sourcemap(input, harmony, stripTypes) {
 			result = global.JSXTransformer.transform(input, {
 				harmony: !!harmony,
 				stripTypes: !!stripTypes,
+				target: 'es3',
 				sourceMap: true
 			});
 		} catch (ex) {
@@ -67,6 +93,7 @@ function ReactNET_transform_sourcemap(input, harmony, stripTypes) {
 			result = global.JSXTransformer.transform(input, {
 				harmony: !!harmony,
 				stripTypes: !!stripTypes,
+				target: 'es3',
 				sourceMap: false
 			});
 		}
@@ -80,7 +107,7 @@ function ReactNET_transform_sourcemap(input, harmony, stripTypes) {
 
 		return JSON.stringify({
 			code: result.code,
-			sourceMap: result.sourceMap.toJSON()
+			sourceMap: result.sourceMap
 		});
 	} catch (ex) {
 		throw new Error(ex.message + " (at line " + ex.lineNumber + " column " + ex.column + ")");
